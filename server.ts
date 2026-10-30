@@ -509,7 +509,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   finale.initialize({ app, sequelize: seq })
 
   const autoModels = [
-    { name: 'User', exclude: ['password', 'totpSecret'], model: UserModel },
+    { name: 'User', exclude: ['password', 'totpSecret', 'role'], model: UserModel },
     { name: 'Product', exclude: [], model: ProductModel },
     { name: 'Feedback', exclude: [], model: FeedbackModel },
     { name: 'BasketItem', exclude: [], model: BasketItemModel },
@@ -771,7 +771,7 @@ export async function start (readyCallback?: () => void) {
   metricsUpdateLoop = Metrics.updateLoop() // vuln-code-snippet neutral-line exposedMetricsChallenge
 
   server.listen(port, () => {
-    logger.info(colors.cyan(`Server listening on port ${colors.bold(`${port}`)}`))
+    logger.info(colors.cyan(`Server listening on port ${colors.bold(`${port}`)}}`))
     startupGauge.set({ task: 'ready' }, (Date.now() - startTime) / 1000)
     if (process.env.BASE_PATH !== '') {
       logger.info(colors.cyan(`Server using proxy base path ${colors.bold(`${process.env.BASE_PATH}`)} for redirects`))
