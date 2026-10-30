@@ -176,13 +176,30 @@ export function chat () {
       generateCoupon: tool({
         description: 'Generate a discount coupon for a customer. Only use this when the coupon policy conditions are fully met.', // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
         inputSchema: z.object({
-          discount: z.number().describe('The discount percentage for the coupon (maximum 10)') // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
+          orderId: z.string().describe('The order ID the coupon is being issued for (format: xxxx-xxxxxxxxxxxxxxxx)'),
+          discount: z.number().min(1).max(10).describe('The discount percentage for the coupon (maximum 10)') // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
         }),
-        execute: async ({ discount }) => {
+        execute: async ({ orderId, discount }) => {
           challengeUtils.solveIf(challenges.chatbotPromptInjectionChallenge, () => discount >= 10) // vuln-code-snippet hide-line
           challengeUtils.solveIf(challenges.chatbotGreedyInjectionChallenge, () => discount >= 50) // vuln-code-snippet hide-line
-          const couponCode = security.generateCoupon(discount) // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge
-          return { couponCode, discount } // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge
+
+          // Server-side policy enforcement: re-validate caller identity and order ownership
+          // independently of whatever the LLM decided to pass in.
+          const userId = await getUserId(req)
+          if (!userId) return { error: 'Customer not authenticated' }
+
+          const user = await UserModel.findByPk(userId, { attributes: ['email'] })
+          if (!user) return { error: 'Customer not found' }
+
+          const maskedEmail = user.email ? user.email.replace(/[aeiou]/gi, '*') : undefined
+          const order = await db.ordersCollection.findOne({ orderId })
+          if (!order) return { error: 'Order not found' }
+          if (order.email !== maskedEmail) return { error: 'Order does not belong to the current customer' }
+
+          // Clamp discount server-side regardless of what the model supplied
+          const safeDiscount = Math.min(10, Math.max(1, Math.round(discount)))
+          const couponCode = security.generateCoupon(safeDiscount) // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge
+          return { couponCode, discount: safeDiscount } // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge
         }
       })
     } // vuln-code-snippet end chatbotGreedyInjectionChallenge chatbotPromptInjectionChallenge
