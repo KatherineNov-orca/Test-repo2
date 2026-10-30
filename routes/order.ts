@@ -145,11 +145,32 @@ export function placeOrder () {
 
           if (req.body.UserId) {
             if (req.body.orderDetails && req.body.orderDetails.paymentId === 'wallet') {
-              const wallet = await WalletModel.findOne({ where: { UserId: req.body.UserId } })
-              if ((wallet != null) && wallet.balance >= totalPrice) {
-                await WalletModel.decrement({ balance: totalPrice }, { where: { UserId: req.body.UserId } })
-              } else {
+              const sequelize = WalletModel.sequelize
+              if (sequelize == null) {
                 next(new Error('Insufficient wallet balance.'))
+                return
+              }
+              const walletTransaction = await sequelize.transaction()
+              try {
+                // Lock the wallet row for the duration of the transaction so the
+                // balance check and the decrement are performed atomically,
+                // preventing concurrent requests from double-spending the balance.
+                const wallet = await WalletModel.findOne({
+                  where: { UserId: req.body.UserId },
+                  transaction: walletTransaction,
+                  lock: walletTransaction.LOCK.UPDATE
+                })
+                if ((wallet != null) && wallet.balance >= totalPrice) {
+                  await WalletModel.decrement({ balance: totalPrice }, { where: { UserId: req.body.UserId }, transaction: walletTransaction })
+                  await walletTransaction.commit()
+                } else {
+                  await walletTransaction.rollback()
+                  next(new Error('Insufficient wallet balance.'))
+                  return
+                }
+              } catch (error: unknown) {
+                await walletTransaction.rollback()
+                next(error)
                 return
               }
             }
