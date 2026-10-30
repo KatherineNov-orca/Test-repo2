@@ -10,7 +10,8 @@ import { UserModel } from '../models/user'
 import * as security from '../lib/insecurity'
 
 export function changePassword () {
-  return async ({ query, headers, connection }: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const { query, connection } = req
     const currentPassword = query.current as string
     const newPassword = query.new as string
     const newPasswordInString = newPassword?.toString()
@@ -24,13 +25,10 @@ export function changePassword () {
       return
     }
 
-    const token = headers.authorization ? headers.authorization.substr('Bearer='.length) : null
-    if (token === null) {
-      next(new Error('Blocked illegal activity by ' + connection.remoteAddress))
-      return
-    }
-
-    const loggedInUser = security.authenticatedUsers.get(token)
+    // Identity is established by the isAuthorized() express-jwt middleware mounted on this
+    // route, which verifies the JWT signature and expiry. The cache below only supplies the
+    // already-authenticated user's cached data and must never be relied upon on its own.
+    const loggedInUser = security.authenticatedUsers.from(req)
     if (!loggedInUser) {
       next(new Error('Blocked illegal activity by ' + connection.remoteAddress))
       return

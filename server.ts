@@ -622,7 +622,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Custom Restful API */
   app.post('/rest/user/login', login())
-  app.get('/rest/user/change-password', utils.asyncHandler(changePassword()))
+  app.get('/rest/user/change-password', security.isAuthorized(), utils.asyncHandler(changePassword()))
   app.post('/rest/user/reset-password', utils.asyncHandler(resetPassword()))
   app.get('/rest/user/security-question', utils.asyncHandler(securityQuestion()))
   app.get('/rest/user/whoami', utils.asyncHandler(retrieveLoggedInUser()))
@@ -771,7 +771,7 @@ export async function start (readyCallback?: () => void) {
   metricsUpdateLoop = Metrics.updateLoop() // vuln-code-snippet neutral-line exposedMetricsChallenge
 
   server.listen(port, () => {
-    logger.info(colors.cyan(`Server listening on port ${colors.bold(`${port}`)}`))
+    logger.info(colors.cyan(`Server listening on port ${colors.bold(`${port}`)}}`))
     startupGauge.set({ task: 'ready' }, (Date.now() - startTime) / 1000)
     if (process.env.BASE_PATH !== '') {
       logger.info(colors.cyan(`Server using proxy base path ${colors.bold(`${process.env.BASE_PATH}`)} for redirects`))
