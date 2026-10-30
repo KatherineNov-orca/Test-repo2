@@ -32,6 +32,12 @@ interface Product {
 export function placeOrder () {
   return (req: Request, res: Response, next: NextFunction) => {
     const id = req.params.id
+    const authUser = security.authenticatedUsers.from(req)
+    const isValidBasketId = Boolean(id) && id !== 'undefined' && id !== 'null' && id !== 'NaN'
+    if ((authUser?.bid != null) && isValidBasketId && authUser.bid !== parseInt(id, 10)) {
+      res.status(403).json({ error: 'Access to this basket is forbidden.' })
+      return
+    }
     BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
       .then(async (basket: BasketModel | null) => {
         if (basket != null) {
