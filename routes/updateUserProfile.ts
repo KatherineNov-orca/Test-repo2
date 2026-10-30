@@ -28,6 +28,17 @@ export function updateUserProfile () {
         return
       }
 
+      // Enforce same-origin as a real authorization guard instead of only
+      // feeding the challenge-tracking callback below. This blocks
+      // cross-site (CSRF) requests that only rely on the ambient auth cookie.
+      const requestOrigin = req.headers.origin ?? req.headers.referer
+      const selfOrigin = `${req.protocol}://${req.headers.host ?? ''}`
+      const isSameOrigin = requestOrigin == null || requestOrigin.startsWith(selfOrigin)
+      if (!isSameOrigin) {
+        next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
+        return
+      }
+
       challengeUtils.solveIf(challenges.csrfChallenge, () => {
         const url = config.get<string>('challenges.overwriteUrlForCsrfChallenge')
         return ((req.headers.origin?.includes('://' + url.replace(/^https?:\/\//, ''))) ??
@@ -39,7 +50,7 @@ export function updateUserProfile () {
       const userWithStatus = utils.queryResultToJson(savedUser)
       const updatedToken = security.authorize(userWithStatus)
       security.authenticatedUsers.put(updatedToken, userWithStatus)
-      res.cookie('token', updatedToken)
+      res.cookie('token', updatedToken, { sameSite: 'strict', secure: req.secure, httpOnly: true })
       res.location(process.env.BASE_PATH + '/profile')
       res.redirect(process.env.BASE_PATH + '/profile')
     } catch (error) {
