@@ -21,6 +21,14 @@ function favicon () {
   return utils.extractFilename(config.get('application.favicon'))
 }
 
+// A CSP source expression must be a single token without whitespace,
+// semicolons or quote characters, otherwise a stored value could be used
+// to terminate the img-src directive and inject additional directives.
+function sanitizeCspImageSource (profileImage: string | undefined): string {
+  const safeToken = profileImage?.split(/[\s;'"]/)[0]
+  return safeToken ? safeToken : "'self'"
+}
+
 export function getUserProfile () {
   return async (req: Request, res: Response, next: NextFunction) => {
     let template: string
@@ -64,10 +72,10 @@ export function getUserProfile () {
           }
           username = eval(code) // eslint-disable-line no-eval
         } catch (err) {
-          username = '\\' + username
+          username = '\' + username
         }
       } else {
-        username = '\\' + username
+        username = '\' + username
       }
       if (username) {
         template = template.replace(/_username_/g, username)
@@ -88,7 +96,7 @@ export function getUserProfile () {
     try {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      const CSP = `img-src 'self' ${user?.profileImage}; script-src 'self' 'unsafe-eval'`
+      const CSP = `img-src 'self' ${sanitizeCspImageSource(user?.profileImage)}; script-src 'self' 'unsafe-eval'`
 
       challengeUtils.solveIf(challenges.usernameXssChallenge, () => {
         return username && user?.profileImage.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && username.includes('<script>alert(`xss`)</script>')
