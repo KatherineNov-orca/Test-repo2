@@ -32,8 +32,13 @@ export function profileImageUrlUpload () {
           await user?.update({ profileImage: `/assets/public/images/uploads/${loggedInUser.data.id}.${ext}` })
         } catch (error) {
           try {
-            const user = await UserModel.findByPk(loggedInUser.data.id)
-            await user?.update({ profileImage: url })
+            // Only persist the raw URL as a fallback if it cannot be (ab)used to
+            // break out of the header-syntax context it is later rendered into
+            // (e.g. to inject additional Content-Security-Policy directives).
+            if (/^[^\s;'"<>]+$/.test(url)) {
+              const user = await UserModel.findByPk(loggedInUser.data.id)
+              await user?.update({ profileImage: url })
+            }
             logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; using image link directly`)
           } catch (error) {
             next(error)
